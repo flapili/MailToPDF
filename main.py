@@ -9,7 +9,6 @@ from pathlib import Path
 from threading import Event
 from imaplib import IMAP4_SSL
 
-
 from croniter import croniter
 from discord_webhook import DiscordWebhook
 from playwright.sync_api import sync_playwright
@@ -24,11 +23,13 @@ class Settings(BaseSettings):
     mailbox: str = Field("INBOX", env="MAILBOX")
     format: str = Field("{settings.mailbox}_{formatted_date}.pdf", env="FORMAT")
     date_format: str = Field("%Y_%m_%d_%Hh%Mm%Ss", env="DATE_FORMAT")
-    cron_pattern: croniter = Field("*/1 * * * *", env="CRON_PATTERN")
+    cron_pattern: croniter | None = Field("*/1 * * * *", env="CRON_PATTERN")
     discord_webhook: HttpUrl | None = Field(None, env="DISCORD_WEBHOOK")
 
     @validator("cron_pattern", pre=True)
     def validate_cron_pattern(cls, v: str):
+        if not v:
+            return None
         return croniter(v)
 
 
@@ -107,9 +108,10 @@ if __name__ == "__main__":
 
     settings = Settings()
     main(settings=settings)
-    while not e.is_set():
-        time_to_wait: float = settings.cron_pattern.get_next(ret_type=float) - time.time()
-        if time_to_wait > 0:
-            print(f"waiting for {time_to_wait:.3f}s")
-            e.wait(time_to_wait)
-        main(settings=settings)
+    if settings.cron_pattern is not None:
+        while not e.is_set():
+            time_to_wait: float = settings.cron_pattern.get_next(ret_type=float) - time.time()
+            if time_to_wait > 0:
+                print(f"waiting for {time_to_wait:.3f}s")
+                e.wait(time_to_wait)
+            main(settings=settings)
